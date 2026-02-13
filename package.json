@@ -1,0 +1,53 @@
+{
+  "name": "clawtick",
+  "version": "1.0.0",
+  "description": "Cloud-powered scheduling for OpenClaw — reliable cron, real-time monitoring, zero missed triggers",
+  "keywords": [
+    "openclaw",
+    "cron",
+    "scheduler",
+    "automation",
+    "ai-agents",
+    "cloud"
+  ],
+  "license": "MIT",
+  "author": "Abdelhak Akermi",
+  "homepage": "https://clawtick.com/docs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Clawtick/cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Clawtick/cli/issues"
+  },
+  "bin": {
+    "clawtick": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "test": "vitest --run",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "chalk": "^5.6.0",
+    "commander": "^12.0.0",
+    "ora": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ]
+}
