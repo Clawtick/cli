@@ -203,3 +203,138 @@ export function validateJobId(jobId: string): { valid: boolean; error?: string }
 
   return { valid: true };
 }
+
+/**
+ * Validate integration type
+ */
+export function validateIntegrationType(type: string): { valid: boolean; error?: string } {
+  const validTypes = ['openclaw', 'webhook'];
+
+  if (!type || typeof type !== 'string') {
+    return { valid: false, error: 'Integration type is required' };
+  }
+
+  const trimmed = type.trim().toLowerCase();
+  if (!validTypes.includes(trimmed)) {
+    return {
+      valid: false,
+      error: `Invalid integration type: ${type}\n\nValid types:\n  ${validTypes.join(', ')}`
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate webhook URL
+ */
+export function validateWebhookUrl(url: string): { valid: boolean; error?: string } {
+  if (!url || typeof url !== 'string') {
+    return { valid: false, error: 'Webhook URL is required for webhook integration' };
+  }
+
+  const trimmed = url.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Webhook URL cannot be empty' };
+  }
+
+  // Validate URL format
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return {
+        valid: false,
+        error: 'Webhook URL must use HTTP or HTTPS protocol'
+      };
+    }
+  } catch {
+    return {
+      valid: false,
+      error: 'Invalid webhook URL format. Must be a valid HTTP/HTTPS URL.'
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate webhook HTTP method
+ */
+export function validateWebhookMethod(method: string): { valid: boolean; error?: string } {
+  const validMethods = ['GET', 'POST', 'PUT', 'DELETE'];
+
+  if (!method || typeof method !== 'string') {
+    return { valid: false, error: 'Webhook method is required for webhook integration' };
+  }
+
+  const upperMethod = method.trim().toUpperCase();
+  if (!validMethods.includes(upperMethod)) {
+    return {
+      valid: false,
+      error: `Invalid HTTP method: ${method}\n\nValid methods:\n  ${validMethods.join(', ')}`
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate webhook headers (JSON string)
+ */
+export function validateWebhookHeaders(headers: string): { valid: boolean; error?: string } {
+  if (!headers || typeof headers !== 'string') {
+    return { valid: false, error: 'Webhook headers must be a JSON string' };
+  }
+
+  const trimmed = headers.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Webhook headers cannot be empty' };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {
+        valid: false,
+        error: 'Webhook headers must be a JSON object (e.g., {"Authorization": "Bearer token"})'
+      };
+    }
+
+    // Check that all values are strings
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value !== 'string') {
+        return {
+          valid: false,
+          error: `Invalid header value for "${key}": must be a string`
+        };
+      }
+    }
+  } catch {
+    return {
+      valid: false,
+      error: 'Invalid JSON format for webhook headers. Example: {"Authorization": "Bearer token"}'
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate webhook body template
+ */
+export function validateWebhookBody(body: string): { valid: boolean; error?: string } {
+  if (!body || typeof body !== 'string') {
+    return { valid: false, error: 'Webhook body must be a string' };
+  }
+
+  const trimmed = body.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Webhook body cannot be empty' };
+  }
+
+  if (trimmed.length > 10000) {
+    return { valid: false, error: 'Webhook body must be 10000 characters or less' };
+  }
+
+  return { valid: true };
+}
