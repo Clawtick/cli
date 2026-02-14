@@ -1,9 +1,12 @@
 {
   "name": "clawtick",
   "version": "1.0.0",
-  "description": "Cloud-powered scheduling for OpenClaw — reliable cron, real-time monitoring, zero missed triggers",
+  "description": "Cloud-powered job scheduling for AI agents — OpenClaw, webhooks, and more. Reliable cron with real-time monitoring.",
   "keywords": [
     "openclaw",
+    "langchain",
+    "crewai",
+    "webhook",
     "cron",
     "scheduler",
     "automation",
@@ -15,10 +18,10 @@
   "homepage": "https://clawtick.com/docs",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Clawtick/cli.git"
+    "url": "git+https://github.com/clawtick/cli.git"
   },
   "bugs": {
-    "url": "https://github.com/Clawtick/cli/issues"
+    "url": "https://github.com/clawtick/cli/issues"
   },
   "bin": {
     "clawtick": "./dist/cli.js"
