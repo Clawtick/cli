@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Clawtick CLI — Cloud-powered scheduling for OpenClaw
+ * Clawtick CLI — Cloud-powered job scheduling for AI agents
  */
 
 import { Command } from "commander";
@@ -13,6 +13,11 @@ import {
   validateJobName,
   validateMessage,
   validateAgentId,
+  validateIntegrationType,
+  validateWebhookUrl,
+  validateWebhookMethod,
+  validateWebhookHeaders,
+  validateWebhookBody,
 } from "./validation.js";
 
 const program = new Command();
@@ -20,7 +25,7 @@ const api = new ApiClient();
 
 program
   .name("clawtick")
-  .description("🦞 Cloud-powered scheduling for OpenClaw")
+  .description("🦞 Cloud-powered job scheduling for AI agents (OpenClaw, webhooks, and more)")
   .version("2.0.0");
 
 // ── Login ──────────────────────────────────────────────
@@ -130,10 +135,28 @@ job
 
       for (const j of jobs) {
         const status = j.enabled ? chalk.green("●") : chalk.gray("○");
-        console.log(`${status} ${chalk.bold(j.name)} ${chalk.gray(`(${j.id})`)}`);
+        const integrationType = j.integrationType || "openclaw";
+        const integrationBadge = integrationType === "webhook"
+          ? chalk.blue("🌐 webhook")
+          : chalk.magenta("⚡ openclaw");
+        const sourceBadge = j.source
+          ? chalk.gray(`[${j.source.toUpperCase()}]`)
+          : "";
+
+        console.log(`${status} ${chalk.bold(j.name)} ${chalk.gray(`(${j.id})`)} ${integrationBadge} ${sourceBadge}`);
         console.log(chalk.gray(`  Cron:    ${j.cron}`));
         console.log(chalk.gray(`  Message: ${j.message}`));
-        console.log(chalk.gray(`  Agent:   ${j.agent || "main"}`));
+
+        if (integrationType === "webhook") {
+          console.log(chalk.gray(`  URL:     ${j.webhookUrl}`));
+          console.log(chalk.gray(`  Method:  ${j.webhookMethod}`));
+        } else {
+          console.log(chalk.gray(`  Agent:   ${j.agent || "main"}`));
+          if (j.channel) {
+            console.log(chalk.gray(`  Channel: ${j.channel}`));
+          }
+        }
+
         console.log(chalk.gray(`  Runs:    ${j.runCount} success, ${j.failCount} failed`));
         if (j.lastRunAt) {
           console.log(chalk.gray(`  Last:    ${new Date(j.lastRunAt).toLocaleString()}`));
@@ -152,13 +175,30 @@ job
   .requiredOption("--cron <expression>", 'Cron expression (e.g., "0 9 * * *")')
   .requiredOption("--message <text>", "Message to send to the agent")
   .option("--name <name>", "Job name")
-  .option("--agent <id>", "Agent ID (default: main)")
-  .option("--channel <channel>", "Target channel")
-  .option("--deliver", "Deliver agent response", false)
-  .option("--reply-to <target>", "Delivery target")
+  .option("--integration <type>", "Integration type: openclaw or webhook (default: openclaw)")
+  .option("--agent <id>", "Agent ID (OpenClaw only, default: main)")
+  .option("--channel <channel>", "Target channel (OpenClaw only)")
+  .option("--deliver", "Deliver agent response (OpenClaw only)", false)
+  .option("--reply-to <target>", "Delivery target (OpenClaw only)")
+  .option("--webhook-url <url>", "Webhook URL (webhook integration only)")
+  .option("--webhook-method <method>", "HTTP method: GET, POST, PUT, DELETE (webhook only)")
+  .option("--webhook-headers <json>", "HTTP headers as JSON string (webhook only)")
+  .option("--webhook-body <template>", "Request body template with {{variables}} (webhook only)")
   .option("--timezone <tz>", "Timezone (default: UTC)")
   .action(async (options) => {
-    // Validate first (no spinner needed for local validation)
+    // Determine integration type (default: openclaw)
+    const integrationType = options.integration?.toLowerCase() || "openclaw";
+
+    // Validate integration type
+    if (options.integration) {
+      const typeCheck = validateIntegrationType(options.integration);
+      if (!typeCheck.valid) {
+        console.error(chalk.red(`❌ ${typeCheck.error}`));
+        process.exit(1);
+      }
+    }
+
+    // Validate common fields
     const cronCheck = validateCronExpression(options.cron);
     if (!cronCheck.valid) {
       console.error(chalk.red(`❌ ${cronCheck.error}`));
@@ -179,34 +219,101 @@ job
       }
     }
 
-    if (options.agent) {
-      const agentCheck = validateAgentId(options.agent);
-      if (!agentCheck.valid) {
-        console.error(chalk.red(`❌ ${agentCheck.error}`));
+    // Validate based on integration type
+    if (integrationType === "webhook") {
+      // Webhook validation
+      if (!options.webhookUrl) {
+        console.error(chalk.red("❌ --webhook-url is required for webhook integration"));
         process.exit(1);
+      }
+
+      if (!options.webhookMethod) {
+        console.error(chalk.red("❌ --webhook-method is required for webhook integration"));
+        process.exit(1);
+      }
+
+      const urlCheck = validateWebhookUrl(options.webhookUrl);
+      if (!urlCheck.valid) {
+        console.error(chalk.red(`❌ ${urlCheck.error}`));
+        process.exit(1);
+      }
+
+      const methodCheck = validateWebhookMethod(options.webhookMethod);
+      if (!methodCheck.valid) {
+        console.error(chalk.red(`❌ ${methodCheck.error}`));
+        process.exit(1);
+      }
+
+      if (options.webhookHeaders) {
+        const headersCheck = validateWebhookHeaders(options.webhookHeaders);
+        if (!headersCheck.valid) {
+          console.error(chalk.red(`❌ ${headersCheck.error}`));
+          process.exit(1);
+        }
+      }
+
+      if (options.webhookBody) {
+        const bodyCheck = validateWebhookBody(options.webhookBody);
+        if (!bodyCheck.valid) {
+          console.error(chalk.red(`❌ ${bodyCheck.error}`));
+          process.exit(1);
+        }
+      }
+    } else {
+      // OpenClaw validation
+      if (options.agent) {
+        const agentCheck = validateAgentId(options.agent);
+        if (!agentCheck.valid) {
+          console.error(chalk.red(`❌ ${agentCheck.error}`));
+          process.exit(1);
+        }
       }
     }
 
     const spinner = ora("Creating job...").start();
     try {
-      const data = await api.createJob({
+      const jobData: any = {
         name: options.name,
         cron: options.cron,
         message: options.message,
-        agent: options.agent,
-        channel: options.channel,
-        deliver: options.deliver,
-        replyTo: options.replyTo,
+        integrationType,
+        source: "cli", // Track that this job was created via CLI
         timezone: options.timezone,
-      });
+      };
 
+      // Add integration-specific fields
+      if (integrationType === "webhook") {
+        jobData.webhookUrl = options.webhookUrl;
+        jobData.webhookMethod = options.webhookMethod.toUpperCase();
+        if (options.webhookHeaders) {
+          jobData.webhookHeaders = JSON.parse(options.webhookHeaders);
+        }
+        if (options.webhookBody) {
+          jobData.webhookBody = options.webhookBody;
+        }
+      } else {
+        jobData.agent = options.agent;
+        jobData.channel = options.channel;
+        jobData.deliver = options.deliver;
+        jobData.replyTo = options.replyTo;
+      }
+
+      const data = await api.createJob(jobData);
       const j = data.job;
+
       spinner.succeed("Job created");
-      console.log(chalk.gray(`ID:      ${j.id}`));
-      console.log(chalk.gray(`Name:    ${j.name}`));
-      console.log(chalk.gray(`Cron:    ${j.cron}`));
-      console.log(chalk.gray(`Message: ${j.message}`));
-      console.log(chalk.gray(`Agent:   ${j.agent}`));
+      console.log(chalk.gray(`ID:           ${j.id}`));
+      console.log(chalk.gray(`Name:         ${j.name}`));
+      console.log(chalk.gray(`Integration:  ${j.integrationType || "openclaw"}`));
+      console.log(chalk.gray(`Cron:         ${j.cron}`));
+      console.log(chalk.gray(`Message:      ${j.message}`));
+
+      if (integrationType === "webhook") {
+        console.log(chalk.gray(`Webhook URL:  ${j.webhookUrl}`));
+        console.log(chalk.gray(`Method:       ${j.webhookMethod}`));
+      } else {
+        console.log(chalk.gray(`Agent:        ${j.agent || "main"}`));
+      }
     } catch (err: any) {
       spinner.fail(err.message);
       process.exit(1);
@@ -233,15 +340,86 @@ job
   .option("--name <name>", "New name")
   .option("--cron <expression>", "New cron expression")
   .option("--message <text>", "New message")
+  .option("--integration <type>", "Integration type: openclaw or webhook")
+  .option("--agent <id>", "Agent ID (OpenClaw only)")
+  .option("--channel <channel>", "Target channel (OpenClaw only)")
+  .option("--deliver", "Enable delivery (OpenClaw only)")
+  .option("--no-deliver", "Disable delivery (OpenClaw only)")
+  .option("--reply-to <target>", "Delivery target (OpenClaw only)")
+  .option("--webhook-url <url>", "Webhook URL (webhook integration only)")
+  .option("--webhook-method <method>", "HTTP method (webhook only)")
+  .option("--webhook-headers <json>", "HTTP headers as JSON (webhook only)")
+  .option("--webhook-body <template>", "Request body template (webhook only)")
+  .option("--timezone <tz>", "Timezone")
   .option("--enable", "Enable the job")
   .option("--disable", "Disable the job")
   .action(async (jobId, options) => {
     const updates: any = {};
+
+    // Common fields
     if (options.name) updates.name = options.name;
-    if (options.cron) updates.cron = options.cron;
-    if (options.message) updates.message = options.message;
+    if (options.cron) {
+      const cronCheck = validateCronExpression(options.cron);
+      if (!cronCheck.valid) {
+        console.error(chalk.red(`❌ ${cronCheck.error}`));
+        process.exit(1);
+      }
+      updates.cron = options.cron;
+    }
+    if (options.message) {
+      const msgCheck = validateMessage(options.message);
+      if (!msgCheck.valid) {
+        console.error(chalk.red(`❌ ${msgCheck.error}`));
+        process.exit(1);
+      }
+      updates.message = options.message;
+    }
+    if (options.timezone) updates.timezone = options.timezone;
     if (options.enable) updates.enabled = true;
     if (options.disable) updates.enabled = false;
+
+    // Integration type
+    if (options.integration) {
+      const typeCheck = validateIntegrationType(options.integration);
+      if (!typeCheck.valid) {
+        console.error(chalk.red(`❌ ${typeCheck.error}`));
+        process.exit(1);
+      }
+      updates.integrationType = options.integration.toLowerCase();
+    }
+
+    // OpenClaw fields
+    if (options.agent !== undefined) updates.agent = options.agent;
+    if (options.channel !== undefined) updates.channel = options.channel;
+    if (options.deliver !== undefined) updates.deliver = options.deliver;
+    if (options.replyTo !== undefined) updates.replyTo = options.replyTo;
+
+    // Webhook fields
+    if (options.webhookUrl) {
+      const urlCheck = validateWebhookUrl(options.webhookUrl);
+      if (!urlCheck.valid) {
+        console.error(chalk.red(`❌ ${urlCheck.error}`));
+        process.exit(1);
+      }
+      updates.webhookUrl = options.webhookUrl;
+    }
+    if (options.webhookMethod) {
+      const methodCheck = validateWebhookMethod(options.webhookMethod);
+      if (!methodCheck.valid) {
+        console.error(chalk.red(`❌ ${methodCheck.error}`));
+        process.exit(1);
+      }
+      updates.webhookMethod = options.webhookMethod.toUpperCase();
+    }
+    if (options.webhookHeaders) {
+      const headersCheck = validateWebhookHeaders(options.webhookHeaders);
+      if (!headersCheck.valid) {
+        console.error(chalk.red(`❌ ${headersCheck.error}`));
+        process.exit(1);
+      }
+      updates.webhookHeaders = JSON.parse(options.webhookHeaders);
+    }
+    if (options.webhookBody !== undefined) updates.webhookBody = options.webhookBody;
 
     if (Object.keys(updates).length === 0) {
       console.error(chalk.yellow("No updates provided. Use --help for options."));
