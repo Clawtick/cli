@@ -90,10 +90,18 @@ export class ApiClient {
         name?: string;
         cron: string;
         message: string;
+        integrationType?: string;
+        // OpenClaw fields
         agent?: string;
         channel?: string;
         deliver?: boolean;
         replyTo?: string;
+        // Webhook fields
+        webhookUrl?: string;
+        webhookMethod?: string;
+        webhookHeaders?: Record<string, string>;
+        webhookBody?: string;
+        // Common fields
         timezone?: string;
     }) {
         return this.request("POST", "/v1/jobs", data);
