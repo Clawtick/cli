@@ -1,6 +1,6 @@
 {
   "name": "clawtick",
-  "version": "2.1.0",
+  "version": "2.0.0",
   "description": "Cloud-powered job scheduling for AI agents — OpenClaw, webhooks, and more. Reliable cron with real-time monitoring.",
   "keywords": [
     "openclaw",
