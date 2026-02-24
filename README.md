@@ -1,21 +1,20 @@
 # ClawTick CLI 🦞
 
-> Cloud-powered job scheduling for AI agents. Supports [OpenClaw](https://github.com/nicepkg/openclaw), LangChain, CrewAI, custom webhooks, and more. Reliable triggers, real-time monitoring, zero missed jobs.
+> Scheduling infrastructure for AI agents. CLI-first API with monitoring, retries, and alerts. Let agents schedule tasks with minimal tokens.
 
 [![npm version](https://img.shields.io/npm/v/clawtick)](https://www.npmjs.com/package/clawtick)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Why ClawTick?
 
-Schedule any AI agent, any framework. ClawTick provides rock-solid cloud infrastructure for cron scheduling with:
+AI agents need infrastructure, not tutorials. ClawTick provides programmatic scheduling without the complexity:
 
-- **Multi-framework support**: OpenClaw, LangChain, CrewAI, custom webhooks
-- **Rock-solid cron scheduling**: AWS EventBridge-powered reliability
-- **Dashboard + CLI**: Manage everything from web or terminal
-- **OpenClaw features**: Multi-channel delivery (WhatsApp, Telegram, Slack, Discord)
-- **Webhook integration**: Trigger any HTTP endpoint on schedule
-- **Execution history**: Track success rates and debug failures
-- **Template variables**: Dynamic URLs and payloads with `{{message}}`, `{{timestamp}}`, etc.
+- **CLI-First Design**: One command, minimal tokens. No context rot from complex setups
+- **Agent-Friendly API**: Create jobs, check status, query logs — all programmatically
+- **Zero Infrastructure**: No servers to manage. Just call the API and it works
+- **Built-in Monitoring**: Email alerts on failures. Full execution history for debugging
+- **Works with Any Stack**: Webhooks, HTTP APIs, OpenClaw agents, LangChain flows
+- **99.9% Uptime**: AWS EventBridge-powered reliability
 
 ## Install
 
@@ -25,37 +24,20 @@ npm install -g clawtick
 
 ## Quick Start
 
-### 1. Get an API key
+### 1. Login
 
-Sign up at [clawtick.com](https://clawtick.com) and generate a key from **Dashboard → API Keys**.
-
-### 2. Login
+Get your API key from [clawtick.com/dashboard/api-keys](https://clawtick.com/dashboard/api-keys):
 
 ```bash
 clawtick login --key cp_your_api_key
 ```
 
-### 3. Configure your gateway
+### 2. Schedule your first job
+
+**Schedule a webhook:**
 
 ```bash
-clawtick gateway set --url http://your-vps:80 --token your_gateway_token
-```
-
-### 4. Create your first job
-
-**For OpenClaw:**
-
-```bash
-clawtick job create \
-  --cron "0 9 * * *" \
-  --message "Good morning! Check my emails" \
-  --name "Morning check"
-```
-
-**For Webhook (any HTTP endpoint):**
-
-```bash
-clawtick job create \
+clawtick jobs create \
   --integration webhook \
   --cron "0 9 * * *" \
   --message "Daily report trigger" \
@@ -64,40 +46,72 @@ clawtick job create \
   --name "Daily webhook"
 ```
 
-That's it. The job will fire daily at 9 AM UTC.
+**Schedule an OpenClaw agent:**
+
+First, configure your gateway:
+```bash
+clawtick gateway set --url http://your-vps:80 --token your_gateway_token
+```
+
+Then create the job:
+```bash
+clawtick jobs create \
+  --cron "0 9 * * *" \
+  --message "Good morning! Check my emails" \
+  --name "Morning check"
+```
+
+That's it. Your job runs reliably at 9 AM UTC every day.
 
 ## Commands
 
-### Authentication
+### Account
 
 ```bash
-clawtick login --key <api-key>    # Authenticate
-clawtick logout                    # Remove credentials
-clawtick whoami                    # Check connection status
+clawtick login --key <api-key>     # Authenticate with API key
+clawtick logout                     # Remove stored credentials
+clawtick whoami                     # Show authentication status
+clawtick plan                       # Show current plan and limits
+clawtick usage                      # Show monthly usage and quota
 ```
 
 ### Jobs
 
 ```bash
-clawtick job list                  # List all jobs
-clawtick job create [options]      # Create a new job
-clawtick job update <id> [options] # Update a job
-clawtick job remove <id>           # Delete a job
-clawtick job trigger <id>          # Run a job now
-clawtick job enable <id>           # Resume a paused job
-clawtick job disable <id>          # Pause a job
+clawtick jobs list                  # List all scheduled jobs
+clawtick jobs list --enabled        # Show only enabled jobs
+clawtick jobs create [options]      # Create a new job
+clawtick jobs inspect <id>          # Show detailed job information
+clawtick jobs update <id> [options] # Update a job
+clawtick jobs remove <id>           # Delete a job
+clawtick jobs trigger <id>          # Run a job now (async)
+clawtick jobs trigger <id> --sync   # Run a job and wait for completion
+clawtick jobs enable <id>           # Resume a paused job
+clawtick jobs disable <id>          # Pause a job
 ```
 
-### Gateway
+### Gateway (OpenClaw)
 
 ```bash
-clawtick gateway set --url <url> --token <token>
+clawtick gateway set --url <url> --token <token>  # Configure gateway
+clawtick gateway status                            # Show current config
+clawtick gateway test                              # Test connectivity
 ```
 
-### Account
+### API Keys
 
 ```bash
-clawtick status                    # View plan, usage, stats
+clawtick apikey list                # List all API keys
+clawtick apikey create --name <name> # Create a new API key
+clawtick apikey revoke <key-id>      # Revoke an API key
+```
+
+### System
+
+```bash
+clawtick status                     # Show account status and stats
+clawtick doctor                     # Run system diagnostics
+clawtick version                    # Show CLI version
 ```
 
 ## Job Options
@@ -143,48 +157,11 @@ clawtick status                    # View plan, usage, stats
 
 ## Examples
 
-### OpenClaw Integration
-
-```bash
-# Daily morning briefing to WhatsApp
-clawtick job create \
-  --cron "0 9 * * *" \
-  --message "Summarize my calendar and top emails" \
-  --name "morning-briefing" \
-  --agent main \
-  --channel whatsapp \
-  --deliver
-
-# Hourly status check to Telegram
-clawtick job create \
-  --cron "0 * * * *" \
-  --message "System status check" \
-  --name "status-check" \
-  --channel telegram \
-  --deliver \
-  --reply-to 123456789
-
-# Weekly report every Monday
-clawtick job create \
-  --cron "0 10 * * 1" \
-  --message "Generate weekly activity report" \
-  --name "weekly-report" \
-  --channel slack \
-  --deliver \
-  --reply-to "#reports"
-
-# Health check every 5 minutes (logs only, no delivery)
-clawtick job create \
-  --cron "*/5 * * * *" \
-  --message "Health check ping" \
-  --name "health-check"
-```
-
-### Webhook Integration
+### Webhook Integration (Most Common)
 
 ```bash
 # Trigger LangChain agent daily
-clawtick job create \
+clawtick jobs create \
   --integration webhook \
   --cron "0 8 * * *" \
   --message "Generate daily insights" \
@@ -194,7 +171,7 @@ clawtick job create \
   --name "langchain-daily"
 
 # Trigger CrewAI workflow hourly
-clawtick job create \
+clawtick jobs create \
   --integration webhook \
   --cron "0 * * * *" \
   --message "Run content generation crew" \
@@ -204,7 +181,7 @@ clawtick job create \
   --name "crewai-hourly"
 
 # Simple GET webhook every 15 minutes
-clawtick job create \
+clawtick jobs create \
   --integration webhook \
   --cron "*/15 * * * *" \
   --message "Health check" \
@@ -213,7 +190,7 @@ clawtick job create \
   --name "health-check"
 
 # Custom agent with authentication
-clawtick job create \
+clawtick jobs create \
   --integration webhook \
   --cron "0 12 * * *" \
   --message "Noon report" \
@@ -222,6 +199,69 @@ clawtick job create \
   --webhook-headers '{"X-Api-Key": "your-key", "Content-Type": "application/json"}' \
   --webhook-body '{"prompt": "{{message}}", "job_name": "{{jobName}}"}' \
   --name "custom-agent"
+
+# Test a webhook immediately with --sync
+clawtick jobs trigger job-123 --sync  # Wait for completion and see results
+```
+
+### OpenClaw Integration (AI Agents)
+
+```bash
+# Daily morning briefing to WhatsApp
+clawtick jobs create \
+  --cron "0 9 * * *" \
+  --message "Summarize my calendar and top emails" \
+  --name "morning-briefing" \
+  --agent main \
+  --channel whatsapp \
+  --deliver
+
+# Hourly status check to Telegram
+clawtick jobs create \
+  --cron "0 * * * *" \
+  --message "System status check" \
+  --name "status-check" \
+  --channel telegram \
+  --deliver \
+  --reply-to 123456789
+
+# Weekly report every Monday
+clawtick jobs create \
+  --cron "0 10 * * 1" \
+  --message "Generate weekly activity report" \
+  --name "weekly-report" \
+  --channel slack \
+  --deliver \
+  --reply-to "#reports"
+
+# Health check every 5 minutes (logs only, no delivery)
+clawtick jobs create \
+  --cron "*/5 * * * *" \
+  --message "Health check ping" \
+  --name "health-check"
+```
+
+### Agent Workflows
+
+```bash
+# Check if everything is working
+clawtick doctor
+
+# Monitor your usage and quota
+clawtick usage
+
+# Inspect a job's configuration and execution history
+clawtick jobs inspect job-123
+
+# List only enabled jobs
+clawtick jobs list --enabled
+
+# Create and test a job immediately
+clawtick jobs create --cron "0 9 * * *" --message "Test" --integration webhook \
+  --webhook-url "https://webhook.site/xxx" --webhook-method POST --name "test-job"
+
+# Trigger it synchronously to verify it works
+clawtick jobs trigger test-job --sync
 ```
 
 ### Template Variables
@@ -241,11 +281,11 @@ Example:
 
 ## Plans
 
-| | Free | Starter ($9/mo) | Pro ($29/mo) |
+| | Free | Starter ($29/mo) | Pro ($79/mo) |
 |---|---|---|---|
-| Jobs | 10 | 50 | Unlimited |
-| Triggers/month | 500 | 5,000 | 50,000 |
-| History | 14 days | 30 days | 90 days |
+| Jobs | 10 | 100 | Unlimited |
+| Triggers/month | 1,000 | 10,000 | 100,000 |
+| History | 7 days | 30 days | 90 days |
 
 Sign up at [clawtick.com](https://clawtick.com) — free plan, no credit card.
 

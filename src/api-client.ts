@@ -128,4 +128,25 @@ export class ApiClient {
     async updateGateway(url: string, token: string) {
         return this.request("PUT", "/v1/gateway", { url, token });
     }
+
+    async getGateway() {
+        return this.request("GET", "/dashboard/gateway");
+    }
+
+    async testGateway() {
+        return this.request("POST", "/dashboard/gateway/test");
+    }
+
+    // API Keys
+    async listApiKeys() {
+        return this.request("GET", "/dashboard/api-keys");
+    }
+
+    async createApiKey(name?: string) {
+        return this.request("POST", "/dashboard/api-keys", { name });
+    }
+
+    async revokeApiKey(keyId: string) {
+        return this.request("DELETE", `/dashboard/api-keys/${keyId}`);
+    }
 }

@@ -25,10 +25,28 @@ const api = new ApiClient();
 
 program
   .name("clawtick")
-  .description("🦞 Cloud-powered job scheduling for AI agents (OpenClaw, webhooks, and more)")
-  .version("2.0.0");
+  .description("🦞 Scheduling infrastructure for AI agents")
+  .version("2.0.0")
+  .addHelpText('after', `
+${chalk.bold('Categories:')}
+  ${chalk.cyan('Account')}    login, logout, whoami, plan, usage
+  ${chalk.cyan('Jobs')}       jobs list, jobs create, jobs inspect, jobs trigger
+  ${chalk.cyan('Gateway')}    gateway set, gateway status, gateway test
+  ${chalk.cyan('Keys')}       apikey list, apikey create, apikey revoke
+  ${chalk.cyan('System')}     status, doctor, version
 
-// ── Login ──────────────────────────────────────────────
+${chalk.bold('Examples:')}
+  clawtick login --key cp_your_key_here
+  clawtick jobs create --cron "0 9 * * *" --message "Daily report"
+  clawtick jobs trigger <job-id> --sync
+  clawtick usage
+
+${chalk.bold('Documentation:')} ${chalk.cyan('https://clawtick.com/docs')}
+  `);
+
+// ══════════════════════════════════════════════════════
+// ACCOUNT COMMANDS
+// ══════════════════════════════════════════════════════
 
 program
   .command("login")
@@ -57,8 +75,6 @@ program
     console.log(chalk.gray(`Config saved to ${getConfigPath()}`));
   });
 
-// ── Logout ─────────────────────────────────────────────
-
 program
   .command("logout")
   .description("Remove stored credentials")
@@ -66,8 +82,6 @@ program
     saveConfig({ apiKey: "" });
     console.log(chalk.green("✅ Logged out"));
   });
-
-// ── Whoami ─────────────────────────────────────────────
 
 program
   .command("whoami")
@@ -92,7 +106,75 @@ program
     }
   });
 
-// ── Gateway ────────────────────────────────────────────
+program
+  .command("plan")
+  .description("Show current plan and limits")
+  .action(async () => {
+    const spinner = ora("Fetching plan details...").start();
+    try {
+      const s = await api.getStatus();
+      spinner.succeed(`Current Plan: ${s.plan.toUpperCase()}\n`);
+
+      console.log(chalk.bold("Limits:"));
+      console.log(chalk.gray(`  Max Jobs:         ${s.jobs.limit === -1 ? 'Unlimited' : s.jobs.limit}`));
+      console.log(chalk.gray(`  Monthly Triggers: ${s.runs.limit === -1 ? 'Unlimited' : s.runs.limit.toLocaleString()}`));
+      console.log(chalk.gray(`  History Retention: ${s.historyDays} days`));
+
+      console.log(chalk.bold("\nCurrent Usage:"));
+      console.log(chalk.gray(`  Active Jobs:      ${s.jobs.enabled}/${s.jobs.total}`));
+      console.log(chalk.gray(`  This Month:       ${s.runs.thisMonth?.toLocaleString() || 0} triggers`));
+
+      if (s.priceGrandfathered) {
+        console.log(chalk.yellow("\n⭐ Early Adopter - Grandfathered Pricing"));
+      }
+
+      console.log(chalk.gray("\nUpgrade at: https://clawtick.com/dashboard/billing"));
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("usage")
+  .description("Show monthly usage and quota")
+  .action(async () => {
+    const spinner = ora("Fetching usage data...").start();
+    try {
+      const s = await api.getStatus();
+      spinner.succeed("Usage Report\n");
+
+      const triggerLimit = s.runs.limit === -1 ? Infinity : s.runs.limit;
+      const triggerUsage = s.runs.thisMonth || 0;
+      const triggerPercent = triggerLimit === Infinity ? 0 : Math.round((triggerUsage / triggerLimit) * 100);
+
+      console.log(chalk.bold("Monthly Triggers:"));
+      console.log(chalk.gray(`  Used:      ${triggerUsage.toLocaleString()}`));
+      console.log(chalk.gray(`  Limit:     ${triggerLimit === Infinity ? 'Unlimited' : triggerLimit.toLocaleString()}`));
+      if (triggerLimit !== Infinity) {
+        const bar = "█".repeat(Math.floor(triggerPercent / 5)) + "░".repeat(20 - Math.floor(triggerPercent / 5));
+        console.log(chalk.gray(`  Progress:  [${bar}] ${triggerPercent}%`));
+      }
+
+      console.log(chalk.bold("\nJobs:"));
+      console.log(chalk.gray(`  Enabled:   ${s.jobs.enabled}`));
+      console.log(chalk.gray(`  Total:     ${s.jobs.total}`));
+      console.log(chalk.gray(`  Limit:     ${s.jobs.limit === -1 ? 'Unlimited' : s.jobs.limit}`));
+
+      console.log(chalk.bold("\nLast 24 Hours:"));
+      console.log(chalk.gray(`  Total Runs: ${s.last24h.total}`));
+      console.log(chalk.gray(`  Failed:     ${s.last24h.failed}`));
+      console.log(chalk.gray(`  Success:    ${s.last24h.total - s.last24h.failed}`));
+
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
+
+// ══════════════════════════════════════════════════════
+// GATEWAY COMMANDS
+// ══════════════════════════════════════════════════════
 
 const gateway = program.command("gateway").description("Manage OpenClaw gateway connection");
 
@@ -113,27 +195,79 @@ gateway
     }
   });
 
-// ── Jobs ───────────────────────────────────────────────
+gateway
+  .command("status")
+  .description("Show current gateway configuration")
+  .action(async () => {
+    const spinner = ora("Fetching gateway config...").start();
+    try {
+      const config = await api.getGateway();
+      if (!config.url) {
+        spinner.info("No gateway configured");
+        console.log(chalk.gray("\nConfigure your OpenClaw gateway:"));
+        console.log(chalk.gray("  clawtick gateway set --url <url> --token <token>"));
+        return;
+      }
+      spinner.succeed("Gateway Configuration\n");
+      console.log(chalk.gray(`  URL:   ${config.url}`));
+      console.log(chalk.gray(`  Token: ${config.token ? config.token.slice(0, 10) + '...' : 'Not set'}`));
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
 
-const job = program.command("job").description("Manage scheduled jobs");
+gateway
+  .command("test")
+  .description("Test gateway connectivity")
+  .action(async () => {
+    const spinner = ora("Testing gateway connection...").start();
+    try {
+      const result = await api.testGateway();
+      if (result.success) {
+        spinner.succeed(`Gateway connection successful (${result.latency}ms)`);
+      } else {
+        spinner.fail(`Gateway connection failed: ${result.message}`);
+        process.exit(1);
+      }
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
 
-job
+// ══════════════════════════════════════════════════════
+// JOBS COMMANDS
+// ══════════════════════════════════════════════════════
+
+const jobs = program.command("jobs").description("Manage scheduled jobs");
+
+jobs
   .command("list")
   .description("List all scheduled jobs")
-  .action(async () => {
+  .option("--enabled", "Show only enabled jobs")
+  .option("--disabled", "Show only disabled jobs")
+  .action(async (options) => {
     const spinner = ora("Fetching jobs...").start();
     try {
       const data = await api.listJobs();
-      const jobs = data.jobs || [];
+      let jobsList = data.jobs || [];
 
-      if (jobs.length === 0) {
-        spinner.info("No jobs found. Create one with: clawtick job create");
+      // Filter by enabled/disabled
+      if (options.enabled) {
+        jobsList = jobsList.filter((j: any) => j.enabled);
+      } else if (options.disabled) {
+        jobsList = jobsList.filter((j: any) => !j.enabled);
+      }
+
+      if (jobsList.length === 0) {
+        spinner.info("No jobs found. Create one with: clawtick jobs create");
         return;
       }
 
-      spinner.succeed(`${jobs.length} job(s) found\n`);
+      spinner.succeed(`${jobsList.length} job(s) found\n`);
 
-      for (const j of jobs) {
+      for (const j of jobsList) {
         const status = j.enabled ? chalk.green("●") : chalk.gray("○");
         const integrationType = j.integrationType || "openclaw";
         const integrationBadge = integrationType === "webhook"
@@ -169,7 +303,7 @@ job
     }
   });
 
-job
+jobs
   .command("create")
   .description("Create a new scheduled job")
   .requiredOption("--cron <expression>", 'Cron expression (e.g., "0 9 * * *")')
@@ -320,7 +454,77 @@ job
     }
   });
 
-job
+jobs
+  .command("inspect <jobId>")
+  .description("Show detailed information about a job")
+  .action(async (jobId) => {
+    const spinner = ora("Fetching job details...").start();
+    try {
+      const data = await api.listJobs();
+      const job = data.jobs?.find((j: any) => j.id === jobId);
+
+      if (!job) {
+        spinner.fail(`Job not found: ${jobId}`);
+        process.exit(1);
+      }
+
+      spinner.succeed(`Job: ${job.name}\n`);
+
+      const status = job.enabled ? chalk.green("Enabled") : chalk.gray("Disabled");
+      const integrationType = job.integrationType || "openclaw";
+
+      console.log(chalk.bold("Details:"));
+      console.log(chalk.gray(`  ID:          ${job.id}`));
+      console.log(chalk.gray(`  Name:        ${job.name}`));
+      console.log(chalk.gray(`  Status:      ${status}`));
+      console.log(chalk.gray(`  Integration: ${integrationType}`));
+      console.log(chalk.gray(`  Cron:        ${job.cron}`));
+      console.log(chalk.gray(`  Message:     ${job.message}`));
+      console.log(chalk.gray(`  Timezone:    ${job.timezone || 'UTC'}`));
+
+      if (integrationType === "webhook") {
+        console.log(chalk.bold("\nWebhook Configuration:"));
+        console.log(chalk.gray(`  URL:     ${job.webhookUrl}`));
+        console.log(chalk.gray(`  Method:  ${job.webhookMethod}`));
+        if (job.webhookHeaders && Object.keys(job.webhookHeaders).length > 0) {
+          console.log(chalk.gray(`  Headers: ${JSON.stringify(job.webhookHeaders, null, 2)}`));
+        }
+        if (job.webhookBody) {
+          console.log(chalk.gray(`  Body:    ${job.webhookBody}`));
+        }
+      } else {
+        console.log(chalk.bold("\nOpenClaw Configuration:"));
+        console.log(chalk.gray(`  Agent:   ${job.agent || "main"}`));
+        if (job.channel) {
+          console.log(chalk.gray(`  Channel: ${job.channel}`));
+        }
+        if (job.deliver) {
+          console.log(chalk.gray(`  Deliver: Yes → ${job.replyTo || 'Default'}`));
+        }
+      }
+
+      console.log(chalk.bold("\nExecution Stats:"));
+      console.log(chalk.gray(`  Total Runs:     ${job.runCount + job.failCount}`));
+      console.log(chalk.gray(`  Successful:     ${job.runCount}`));
+      console.log(chalk.gray(`  Failed:         ${job.failCount}`));
+      if (job.lastRunAt) {
+        console.log(chalk.gray(`  Last Run:       ${new Date(job.lastRunAt).toLocaleString()}`));
+      }
+      if (job.createdAt) {
+        console.log(chalk.gray(`  Created:        ${new Date(job.createdAt).toLocaleString()}`));
+      }
+
+      if (job.source) {
+        console.log(chalk.gray(`\n  Source:         ${job.source.toUpperCase()}`));
+      }
+
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
+
+jobs
   .command("remove <jobId>")
   .description("Delete a scheduled job")
   .action(async (jobId) => {
@@ -334,7 +538,7 @@ job
     }
   });
 
-job
+jobs
   .command("update <jobId>")
   .description("Update a job")
   .option("--name <name>", "New name")
@@ -436,21 +640,82 @@ job
     }
   });
 
-job
+jobs
   .command("trigger <jobId>")
   .description("Manually trigger a job now")
-  .action(async (jobId) => {
-    const spinner = ora("Triggering job...").start();
-    try {
-      await api.triggerJob(jobId);
-      spinner.succeed(`Job triggered: ${jobId}`);
-    } catch (err: any) {
-      spinner.fail(err.message);
-      process.exit(1);
+  .option("--sync", "Wait for execution to complete and show results")
+  .action(async (jobId, options) => {
+    if (options.sync) {
+      const spinner = ora("Triggering job and waiting for completion...").start();
+      try {
+        // Trigger the job
+        await api.triggerJob(jobId);
+        spinner.text = "Job triggered, waiting for execution...";
+
+        // Poll for completion (check every 2 seconds, max 5 minutes)
+        const maxAttempts = 150; // 5 minutes
+        let attempts = 0;
+        let completed = false;
+        let result: any = null;
+
+        while (attempts < maxAttempts && !completed) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          attempts++;
+
+          // Fetch job runs
+          const data = await api.listJobs();
+          const job = data.jobs?.find((j: any) => j.id === jobId);
+
+          if (job && job.lastRunAt) {
+            const lastRunTime = new Date(job.lastRunAt).getTime();
+            const now = Date.now();
+
+            // If last run is within the last 30 seconds, assume it's our triggered run
+            if (now - lastRunTime < 30000) {
+              completed = true;
+              result = {
+                status: job.failCount > 0 ? 'failed' : 'success',
+                lastRunAt: job.lastRunAt,
+              };
+            }
+          }
+        }
+
+        if (completed && result) {
+          if (result.status === 'success') {
+            spinner.succeed(`Job completed successfully`);
+            console.log(chalk.gray(`  Job ID:    ${jobId}`));
+            console.log(chalk.gray(`  Completed: ${new Date(result.lastRunAt).toLocaleString()}`));
+          } else {
+            spinner.fail(`Job execution failed`);
+            console.log(chalk.gray(`  Job ID:    ${jobId}`));
+            console.log(chalk.gray(`  Failed at: ${new Date(result.lastRunAt).toLocaleString()}`));
+            console.log(chalk.yellow("\nCheck logs for details:"));
+            console.log(chalk.gray(`  clawtick jobs inspect ${jobId}`));
+          }
+        } else {
+          spinner.warn(`Job triggered, but execution status unknown (timeout)`);
+          console.log(chalk.gray(`  Job ID: ${jobId}`));
+        }
+      } catch (err: any) {
+        spinner.fail(err.message);
+        process.exit(1);
+      }
+    } else {
+      // Async mode (original behavior)
+      const spinner = ora("Triggering job...").start();
+      try {
+        await api.triggerJob(jobId);
+        spinner.succeed(`Job triggered: ${jobId}`);
+        console.log(chalk.gray("\nTip: Use --sync to wait for completion and see results"));
+      } catch (err: any) {
+        spinner.fail(err.message);
+        process.exit(1);
+      }
     }
   });
 
-job
+jobs
   .command("enable <jobId>")
   .description("Enable (resume) a paused job")
   .action(async (jobId) => {
@@ -464,7 +729,7 @@ job
     }
   });
 
-job
+jobs
   .command("disable <jobId>")
   .description("Disable (pause) a job")
   .action(async (jobId) => {
@@ -478,7 +743,169 @@ job
     }
   });
 
-// ── Status ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════
+// API KEY COMMANDS
+// ══════════════════════════════════════════════════════
+
+const apikey = program.command("apikey").description("Manage API keys");
+
+apikey
+  .command("list")
+  .description("List all API keys")
+  .action(async () => {
+    const spinner = ora("Fetching API keys...").start();
+    try {
+      const data = await api.listApiKeys();
+      const keys = data.keys || [];
+
+      if (keys.length === 0) {
+        spinner.info("No API keys found. Create one with: clawtick apikey create");
+        return;
+      }
+
+      spinner.succeed(`${keys.length} API key(s) found\n`);
+
+      for (const k of keys) {
+        const prefix = k.key ? k.key.slice(0, 10) + '...' : k.keyId;
+        console.log(chalk.bold(k.name || 'Unnamed'));
+        console.log(chalk.gray(`  Key:     ${prefix}`));
+        console.log(chalk.gray(`  ID:      ${k.keyId}`));
+        if (k.createdAt) {
+          console.log(chalk.gray(`  Created: ${new Date(k.createdAt).toLocaleString()}`));
+        }
+        if (k.lastUsed) {
+          console.log(chalk.gray(`  Last:    ${new Date(k.lastUsed).toLocaleString()}`));
+        }
+        console.log();
+      }
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
+
+apikey
+  .command("create")
+  .description("Create a new API key")
+  .option("--name <name>", "Descriptive name for the key (e.g., ci-pipeline, production)")
+  .action(async (options) => {
+    const spinner = ora("Creating API key...").start();
+    try {
+      const data = await api.createApiKey(options.name);
+      spinner.succeed("API key created\n");
+
+      console.log(chalk.yellow("⚠️  Save this key securely - it won't be shown again!\n"));
+      console.log(chalk.bold("API Key:"));
+      console.log(chalk.cyan(`  ${data.key}\n`));
+      console.log(chalk.gray(`Name: ${data.name || 'Unnamed'}`));
+      console.log(chalk.gray(`ID:   ${data.keyId}`));
+
+      console.log(chalk.gray("\nUse it with:"));
+      console.log(chalk.gray(`  clawtick login --key ${data.key}`));
+      console.log(chalk.gray(`  export CLAWPULSE_API_KEY=${data.key}`));
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
+
+apikey
+  .command("revoke <keyId>")
+  .description("Revoke an API key")
+  .action(async (keyId) => {
+    const spinner = ora("Revoking API key...").start();
+    try {
+      await api.revokeApiKey(keyId);
+      spinner.succeed(`API key revoked: ${keyId}`);
+      console.log(chalk.yellow("\n⚠️  This key can no longer be used for authentication"));
+    } catch (err: any) {
+      spinner.fail(err.message);
+      process.exit(1);
+    }
+  });
+
+// ══════════════════════════════════════════════════════
+// SYSTEM COMMANDS
+// ══════════════════════════════════════════════════════
+
+program
+  .command("doctor")
+  .description("Run system diagnostics")
+  .action(async () => {
+    console.log(chalk.bold("🏥 Clawtick Health Check\n"));
+
+    // Check authentication
+    const config = loadConfig();
+    if (!config.apiKey) {
+      console.log(chalk.red("✗ Not authenticated"));
+      console.log(chalk.gray("  Run: clawtick login --key <your-key>\n"));
+      process.exit(1);
+    }
+    console.log(chalk.green("✓ API key found"));
+
+    // Check API connection
+    const spinner = ora("Checking API connection...").start();
+    try {
+      const status = await api.getStatus();
+      spinner.succeed("API connection OK");
+      console.log(chalk.gray(`  Plan: ${status.plan}`));
+      console.log(chalk.gray(`  Jobs: ${status.jobs.enabled}/${status.jobs.total}\n`));
+    } catch (err: any) {
+      spinner.fail(`API connection failed: ${err.message}`);
+      process.exit(1);
+    }
+
+    // Check gateway configuration (if OpenClaw is used)
+    try {
+      const gatewayConfig = await api.getGateway();
+      if (gatewayConfig.url) {
+        console.log(chalk.green("✓ Gateway configured"));
+        console.log(chalk.gray(`  URL: ${gatewayConfig.url}\n`));
+
+        // Test gateway connection
+        const testSpinner = ora("Testing gateway connection...").start();
+        try {
+          const testResult = await api.testGateway();
+          if (testResult.success) {
+            testSpinner.succeed(`Gateway connection OK (${testResult.latency}ms)`);
+          } else {
+            testSpinner.fail(`Gateway connection failed: ${testResult.message}`);
+          }
+        } catch (err: any) {
+          testSpinner.fail(`Gateway test failed: ${err.message}`);
+        }
+      } else {
+        console.log(chalk.yellow("⚠ Gateway not configured"));
+        console.log(chalk.gray("  Configure with: clawtick gateway set --url <url> --token <token>\n"));
+      }
+    } catch (err: any) {
+      console.log(chalk.yellow(`⚠ Could not check gateway: ${err.message}\n`));
+    }
+
+    // Check for quota issues
+    try {
+      const status = await api.getStatus();
+      const triggerLimit = status.runs.limit;
+      const triggerUsage = status.runs.thisMonth || 0;
+
+      if (triggerLimit !== -1) {
+        const usage = (triggerUsage / triggerLimit) * 100;
+        if (usage >= 90) {
+          console.log(chalk.yellow(`⚠ High trigger usage: ${Math.round(usage)}%`));
+          console.log(chalk.gray("  Consider upgrading your plan\n"));
+        } else if (usage >= 100) {
+          console.log(chalk.red("✗ Trigger quota exceeded"));
+          console.log(chalk.gray("  Upgrade at: https://clawtick.com/dashboard/billing\n"));
+        } else {
+          console.log(chalk.green(`✓ Quota healthy (${Math.round(usage)}% used)\n`));
+        }
+      }
+    } catch (err: any) {
+      console.log(chalk.yellow(`⚠ Could not check quota: ${err.message}\n`));
+    }
+
+    console.log(chalk.green("All checks completed!"));
+  });
 
 program
   .command("status")
