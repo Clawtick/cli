@@ -144,8 +144,8 @@ program
       const s = await api.getStatus();
       spinner.succeed("Usage Report\n");
 
-      const triggerLimit = s.runs.limit === -1 ? Infinity : s.runs.limit;
-      const triggerUsage = s.runs.thisMonth || 0;
+      const triggerLimit = s.quota.triggersMax === -1 ? Infinity : s.quota.triggersMax;
+      const triggerUsage = s.quota.triggersUsed || 0;
       const triggerPercent = triggerLimit === Infinity ? 0 : Math.round((triggerUsage / triggerLimit) * 100);
 
       console.log(chalk.bold("Monthly Triggers:"));
@@ -159,7 +159,7 @@ program
       console.log(chalk.bold("\nJobs:"));
       console.log(chalk.gray(`  Enabled:   ${s.jobs.enabled}`));
       console.log(chalk.gray(`  Total:     ${s.jobs.total}`));
-      console.log(chalk.gray(`  Limit:     ${s.jobs.limit === -1 ? 'Unlimited' : s.jobs.limit}`));
+      console.log(chalk.gray(`  Limit:     ${s.quota.jobsMax === -1 ? 'Unlimited' : s.quota.jobsMax}`));
 
       console.log(chalk.bold("\nLast 24 Hours:"));
       console.log(chalk.gray(`  Total Runs: ${s.last24h.total}`));
