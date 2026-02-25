@@ -885,8 +885,8 @@ program
     // Check for quota issues
     try {
       const status = await api.getStatus();
-      const triggerLimit = status.runs.limit;
-      const triggerUsage = status.runs.thisMonth || 0;
+      const triggerLimit = status.quota.triggersMax;
+      const triggerUsage = status.quota.triggersUsed || 0;
 
       if (triggerLimit !== -1) {
         const usage = (triggerUsage / triggerLimit) * 100;
