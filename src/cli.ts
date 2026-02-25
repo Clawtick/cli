@@ -25,7 +25,7 @@ const api = new ApiClient();
 
 program
   .name("clawtick")
-  .description("🦞 Scheduling infrastructure for AI agents")
+  .description("🦞 Cloud scheduler for AI agents. Never miss a job again.")
   .version("2.0.0")
   .addHelpText('after', `
 ${chalk.bold('Categories:')}
