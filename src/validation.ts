@@ -31,7 +31,7 @@ export function validateCronExpression(cron: string): { valid: boolean; error?: 
   }
 
   // Basic field validation
-  const fieldPattern = /^(\*|[0-9]+(-[0-9]+)?(\/[0-9]+)?)(,(\*|[0-9]+(-[0-9]+)?(\/[0-9]+)?))*$/;
+  const fieldPattern = /^(\*(\/[0-9]+)?|[0-9]+(-[0-9]+)?(\/[0-9]+)?)(,(\*(\/[0-9]+)?|[0-9]+(-[0-9]+)?(\/[0-9]+)?))*$/;
   for (const part of parts) {
     if (part !== '?' && !fieldPattern.test(part)) {
       return {
