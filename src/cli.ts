@@ -19,6 +19,7 @@ import {
   validateWebhookHeaders,
   validateWebhookBody,
 } from "./validation.js";
+import { readVersion } from "./version.js";
 
 const program = new Command();
 const api = new ApiClient();
@@ -26,7 +27,7 @@ const api = new ApiClient();
 program
   .name("clawtick")
   .description("🦞 Cloud scheduler for AI agents. Never miss a job again.")
-  .version("2.0.0")
+  .version(readVersion())
   .addHelpText('after', `
 ${chalk.bold('Categories:')}
   ${chalk.cyan('Account')}    login, logout, whoami, plan, usage
