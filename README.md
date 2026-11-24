@@ -281,11 +281,14 @@ Example:
 
 ## Plans
 
-| | Free | Starter ($29/mo) | Pro ($79/mo) |
+| | Free | Starter ($12/mo) | Pro ($39/mo) |
 |---|---|---|---|
-| Jobs | 10 | 100 | Unlimited |
-| Triggers/month | 1,000 | 10,000 | 100,000 |
+| Jobs | 5 | 50 | Unlimited (fair-use ceiling 1,000) |
+| API keys | 2 | 10 | 25 |
+| Triggers/month | 500 | 5,000 | 50,000 |
 | History | 7 days | 30 days | 90 days |
+
+Annual billing is about 17% cheaper.
 
 Sign up at [clawtick.com](https://clawtick.com) — free plan, no credit card.
 

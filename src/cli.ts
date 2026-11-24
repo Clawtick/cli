@@ -117,17 +117,13 @@ program
       spinner.succeed(`Current Plan: ${s.plan.toUpperCase()}\n`);
 
       console.log(chalk.bold("Limits:"));
-      console.log(chalk.gray(`  Max Jobs:         ${s.jobs.limit === -1 ? 'Unlimited' : s.jobs.limit}`));
-      console.log(chalk.gray(`  Monthly Triggers: ${s.runs.limit === -1 ? 'Unlimited' : s.runs.limit.toLocaleString()}`));
-      console.log(chalk.gray(`  History Retention: ${s.historyDays} days`));
+      console.log(chalk.gray(`  Max Jobs:         ${s.quota.jobsMax === -1 ? 'Unlimited' : s.quota.jobsMax}`));
+      console.log(chalk.gray(`  Monthly Triggers: ${s.quota.triggersMax === -1 ? 'Unlimited' : s.quota.triggersMax.toLocaleString()}`));
+      console.log(chalk.gray(`  History Retention: ${s.quota.historyDays} days`));
 
       console.log(chalk.bold("\nCurrent Usage:"));
       console.log(chalk.gray(`  Active Jobs:      ${s.jobs.enabled}/${s.jobs.total}`));
-      console.log(chalk.gray(`  This Month:       ${s.runs.thisMonth?.toLocaleString() || 0} triggers`));
-
-      if (s.priceGrandfathered) {
-        console.log(chalk.yellow("\n⭐ Early Adopter - Grandfathered Pricing"));
-      }
+      console.log(chalk.gray(`  This Month:       ${s.quota.triggersUsed?.toLocaleString() || 0} triggers`));
 
       console.log(chalk.gray("\nUpgrade at: https://clawtick.com/dashboard/billing"));
     } catch (err: any) {
